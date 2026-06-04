@@ -8,9 +8,10 @@ wall-based helpers used by the original coursework API.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 from pathlib import Path
 import random
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 
 Position = Tuple[int, int]
@@ -217,9 +218,52 @@ def parse_ascii_maze(text: str) -> Maze:
 
 def load_maze(path: str | Path) -> Maze:
     try:
-        return parse_ascii_maze(Path(path).read_text(encoding="utf-8"))
+        text = Path(path).read_text(encoding="utf-8")
     except OSError as exc:
         raise IOError(f"Cannot read maze file: {path}") from exc
+    stripped = text.lstrip()
+    if stripped.startswith("{"):
+        return maze_from_json(json.loads(stripped))
+    return parse_ascii_maze(text)
+
+
+def save_maze(maze: Maze, path: str | Path) -> None:
+    Path(path).write_text(json.dumps(maze_to_json(maze), indent=2), encoding="utf-8")
+
+
+def maze_to_json(maze: Maze) -> Dict[str, Any]:
+    return {
+        "format": "graph-maze-pathfinder",
+        "width": maze.width,
+        "height": maze.height,
+        "blocked": _positions_to_lists(maze.blocked),
+        "horizontal_walls": _positions_to_lists(maze.horizontal_walls),
+        "vertical_walls": _positions_to_lists(maze.vertical_walls),
+        "weights": [
+            {"x": x, "y": y, "cost": cost}
+            for (x, y), cost in sorted(maze.weights.items())
+        ],
+        "start": list(maze.start),
+        "goal": list(maze.goal) if maze.goal is not None else None,
+    }
+
+
+def maze_from_json(data: Dict[str, Any]) -> Maze:
+    if data.get("format") != "graph-maze-pathfinder":
+        raise ValueError("Unsupported maze JSON format")
+    return Maze(
+        width=int(data["width"]),
+        height=int(data["height"]),
+        blocked=_lists_to_positions(data.get("blocked", [])),
+        horizontal_walls=_lists_to_positions(data.get("horizontal_walls", [])),
+        vertical_walls=_lists_to_positions(data.get("vertical_walls", [])),
+        weights={
+            (int(item["x"]), int(item["y"])): int(item["cost"])
+            for item in data.get("weights", [])
+        },
+        start=tuple(data.get("start", (0, 0))),  # type: ignore[arg-type]
+        goal=tuple(data["goal"]) if data.get("goal") is not None else None,
+    )
 
 
 def create_perfect_maze(width: int, height: int, seed: Optional[int] = None) -> Maze:
@@ -259,6 +303,30 @@ def create_perfect_maze(width: int, height: int, seed: Optional[int] = None) -> 
     return maze
 
 
+def add_random_weights(
+    maze: Maze,
+    density: float = 0.2,
+    minimum: int = 2,
+    maximum: int = 9,
+    seed: Optional[int] = None,
+) -> Maze:
+    rng = random.Random(seed)
+    density = min(1.0, max(0.0, density))
+    candidates = [
+        (x, y)
+        for y in range(maze.height)
+        for x in range(maze.width)
+        if (x, y) not in {maze.start, maze.goal} and maze.is_open((x, y))
+    ]
+    rng.shuffle(candidates)
+    target_count = int(round(len(candidates) * density))
+    if density > 0 and candidates:
+        target_count = max(1, target_count)
+    for position in candidates[:target_count]:
+        maze.weights[position] = rng.randint(minimum, maximum)
+    return maze
+
+
 def _has_solid_hash_border(lines: List[str]) -> bool:
     if len(lines) < 3 or len(lines[0]) < 3:
         return False
@@ -280,3 +348,11 @@ def _remove_wall_between(maze: Maze, first: Position, second: Position, directio
         maze.horizontal_walls.discard((x1, y2))
     elif direction == "S":
         maze.horizontal_walls.discard((x1, y1))
+
+
+def _positions_to_lists(positions: Iterable[Position]) -> List[List[int]]:
+    return [[x, y] for x, y in sorted(positions)]
+
+
+def _lists_to_positions(items: Iterable[Iterable[int]]) -> Set[Position]:
+    return {(int(x), int(y)) for x, y in items}
