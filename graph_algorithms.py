@@ -45,8 +45,11 @@ def solve_maze(
     name = normalise_algorithm_name(algorithm)
     functions = {
         "bfs": breadth_first_search,
+        "bidirectional": bidirectional_breadth_first_search,
         "dfs": depth_first_search,
         "dijkstra": dijkstra_search,
+        "greedy": greedy_best_first_search,
+        "bellmanford": bellman_ford_search,
         "astar": a_star_search,
     }
     return functions[name](maze, start=start, goal=goal)
@@ -57,14 +60,25 @@ def normalise_algorithm_name(name: str) -> str:
     aliases = {
         "breadthfirst": "bfs",
         "breadthfirstsearch": "bfs",
+        "bibfs": "bidirectional",
+        "bidirectionalbfs": "bidirectional",
+        "bidirectionalbreadthfirst": "bidirectional",
+        "bidirectionalbreadthfirstsearch": "bidirectional",
         "depthfirst": "dfs",
         "depthfirstsearch": "dfs",
         "a": "astar",
         "astarsearch": "astar",
+        "greedybestfirst": "greedy",
+        "greedybestfirstsearch": "greedy",
+        "bestfirst": "greedy",
+        "bellman": "bellmanford",
+        "bellmanfordsearch": "bellmanford",
     }
     cleaned = aliases.get(cleaned, cleaned)
-    if cleaned not in {"bfs", "dfs", "dijkstra", "astar"}:
-        raise ValueError("Algorithm must be one of: bfs, dfs, dijkstra, astar")
+    if cleaned not in {"bfs", "bidirectional", "dfs", "dijkstra", "greedy", "bellmanford", "astar"}:
+        raise ValueError(
+            "Algorithm must be one of: bfs, bidirectional, dfs, dijkstra, greedy, bellmanford, astar"
+        )
     return cleaned
 
 
@@ -120,6 +134,36 @@ def depth_first_search(
     return _result("DFS", maze, start, goal, path, visited_order)
 
 
+def bidirectional_breadth_first_search(
+    maze: Maze,
+    start: Optional[Position] = None,
+    goal: Optional[Position] = None,
+) -> SearchResult:
+    start, goal = _resolve_endpoints(maze, start, goal)
+    if start == goal:
+        return _result("Bidirectional BFS", maze, start, goal, [start], [start])
+
+    front_start: deque[Position] = deque([start])
+    front_goal: deque[Position] = deque([goal])
+    parent_start: Dict[Position, Optional[Position]] = {start: None}
+    parent_goal: Dict[Position, Optional[Position]] = {goal: None}
+    visited_order: List[Position] = []
+    meeting: Optional[Position] = None
+
+    while front_start and front_goal and meeting is None:
+        meeting = _expand_bidirectional_frontier(
+            maze, front_start, parent_start, parent_goal, visited_order
+        )
+        if meeting is not None:
+            break
+        meeting = _expand_bidirectional_frontier(
+            maze, front_goal, parent_goal, parent_start, visited_order
+        )
+
+    path = _reconstruct_bidirectional_path(parent_start, parent_goal, start, goal, meeting)
+    return _result("Bidirectional BFS", maze, start, goal, path, visited_order)
+
+
 def dijkstra_search(
     maze: Maze,
     start: Optional[Position] = None,
@@ -149,6 +193,73 @@ def dijkstra_search(
 
     path = _reconstruct_path(came_from, start, goal)
     return _result("Dijkstra", maze, start, goal, path, visited_order)
+
+
+def greedy_best_first_search(
+    maze: Maze,
+    start: Optional[Position] = None,
+    goal: Optional[Position] = None,
+    heuristic: Optional[Heuristic] = None,
+) -> SearchResult:
+    start, goal = _resolve_endpoints(maze, start, goal)
+    heuristic = heuristic or manhattan_distance
+    frontier: List[Tuple[float, Position]] = [(heuristic(start, goal), start)]
+    came_from: Dict[Position, Optional[Position]] = {start: None}
+    visited_order: List[Position] = []
+    expanded: Set[Position] = set()
+
+    while frontier:
+        _priority, current = heapq.heappop(frontier)
+        if current in expanded:
+            continue
+        expanded.add(current)
+        visited_order.append(current)
+        if current == goal:
+            break
+        for nxt in maze.neighbours(current):
+            if nxt not in came_from:
+                came_from[nxt] = current
+                heapq.heappush(frontier, (heuristic(nxt, goal), nxt))
+
+    path = _reconstruct_path(came_from, start, goal)
+    return _result("Greedy Best-First", maze, start, goal, path, visited_order)
+
+
+def bellman_ford_search(
+    maze: Maze,
+    start: Optional[Position] = None,
+    goal: Optional[Position] = None,
+) -> SearchResult:
+    start, goal = _resolve_endpoints(maze, start, goal)
+    open_cells = [
+        (x, y)
+        for y in range(maze.height)
+        for x in range(maze.width)
+        if maze.is_open((x, y))
+    ]
+    distances: Dict[Position, float] = {cell: math.inf for cell in open_cells}
+    parents: Dict[Position, Optional[Position]] = {start: None}
+    distances[start] = 0
+    visited_order: List[Position] = []
+
+    for _ in range(max(0, len(open_cells) - 1)):
+        changed = False
+        for current in open_cells:
+            if distances[current] == math.inf:
+                continue
+            if current not in visited_order:
+                visited_order.append(current)
+            for nxt in maze.neighbours(current):
+                candidate = distances[current] + maze.movement_cost(nxt)
+                if candidate < distances[nxt]:
+                    distances[nxt] = candidate
+                    parents[nxt] = current
+                    changed = True
+        if not changed:
+            break
+
+    path = _reconstruct_path(parents, start, goal)
+    return _result("Bellman-Ford", maze, start, goal, path, visited_order)
 
 
 def a_star_search(
@@ -219,6 +330,54 @@ def _reconstruct_path(
         current = came_from[current]
     path.reverse()
     return path if path and path[0] == start else []
+
+
+def _expand_bidirectional_frontier(
+    maze: Maze,
+    frontier: deque[Position],
+    own_parent: Dict[Position, Optional[Position]],
+    other_parent: Dict[Position, Optional[Position]],
+    visited_order: List[Position],
+) -> Optional[Position]:
+    for _ in range(len(frontier)):
+        current = frontier.popleft()
+        visited_order.append(current)
+        for nxt in maze.neighbours(current):
+            if nxt not in own_parent:
+                own_parent[nxt] = current
+                if nxt in other_parent:
+                    return nxt
+                frontier.append(nxt)
+    return None
+
+
+def _reconstruct_bidirectional_path(
+    parent_start: Dict[Position, Optional[Position]],
+    parent_goal: Dict[Position, Optional[Position]],
+    start: Position,
+    goal: Position,
+    meeting: Optional[Position],
+) -> List[Position]:
+    if meeting is None:
+        return []
+
+    first_half: List[Position] = []
+    current: Optional[Position] = meeting
+    while current is not None:
+        first_half.append(current)
+        current = parent_start[current]
+    first_half.reverse()
+    if first_half[0] != start:
+        return []
+
+    second_half: List[Position] = []
+    current = parent_goal[meeting]
+    while current is not None:
+        second_half.append(current)
+        current = parent_goal[current]
+
+    path = first_half + second_half
+    return path if path and path[-1] == goal else []
 
 
 def _result(

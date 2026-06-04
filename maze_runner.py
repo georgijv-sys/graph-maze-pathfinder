@@ -53,7 +53,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--algorithm",
-        choices=["bfs", "dfs", "dijkstra", "astar"],
+        choices=["astar", "dijkstra", "bellmanford", "greedy", "bidirectional", "bfs", "dfs"],
         default="astar",
         help="Search algorithm to use.",
     )
