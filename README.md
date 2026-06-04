@@ -1,77 +1,209 @@
-# graph-maze-pathfinder
+# Graph Maze Pathfinder
 
-A Python maze solver that models the maze as a graph and demonstrates several
-pathfinding algorithms:
+Graph Maze Pathfinder is a Python application for building, solving, and
+visualising mazes as graphs. The project includes a Tkinter desktop interface,
+a command-line runner, deterministic maze generation, weighted terrain, export
+files, and a small test suite covering the core pathfinding behaviour.
 
-- BFS for the shortest unweighted route.
-- Bidirectional BFS for two-front unweighted search.
-- DFS for depth-first exploration.
-- Dijkstra for weighted shortest paths.
-- Bellman-Ford for weighted shortest paths by edge relaxation.
-- Greedy Best-First Search for heuristic-driven exploration.
-- A* for heuristic shortest paths using Manhattan distance.
+The main goal of the project is to make shortest-path algorithms visible. A
+maze is represented as a graph: cells are nodes, valid moves are edges, and
+weighted cells change the cost of entering a node.
 
-The main experience is a Tkinter GUI. It lets a user load sample files, generate
-new mazes, choose weighted terrain, compare algorithms, solve, animate, save
-maze files, and export exploration statistics without using the command line.
+## Highlights
 
-## Run the GUI
+- Interactive GUI for loading sample mazes, generating new mazes, solving,
+  animating, comparing algorithms, saving mazes, and exporting results.
+- Seven pathfinding algorithms implemented in plain Python.
+- Weighted and unweighted maze support.
+- Deterministic maze generation using a seed, which makes examples repeatable.
+- File support for both simple text mazes and JSON-backed generated mazes.
+- CSV and text exports for explored cells, final path, cost, and runner actions.
+- Unit tests for parsing, generation, weighted search, save/load, and movement
+  command conversion.
+- No third-party runtime dependencies.
+
+## Algorithms
+
+| Algorithm | Best use in this project | Guarantee |
+| --- | --- | --- |
+| BFS | Shortest route by number of steps in an unweighted maze | Optimal for unweighted paths |
+| Bidirectional BFS | Unweighted shortest path from both start and goal | Optimal for unweighted paths |
+| DFS | Demonstrates depth-first exploration behaviour | Not shortest-path optimal |
+| Dijkstra | Weighted shortest path | Optimal with non-negative costs |
+| Bellman-Ford | Weighted pathfinding by repeated relaxation | Optimal with non-negative costs used here |
+| Greedy Best-First | Heuristic-driven exploration toward the goal | Fast, not guaranteed optimal |
+| A* | Weighted search using Manhattan distance | Optimal here because movement costs are positive |
+
+## Requirements
+
+- Python 3.10 or newer.
+- Tkinter for the GUI. It is included with most standard Python installations.
+
+The project uses only the Python standard library.
+
+## Quick Start
+
+Run the GUI:
 
 ```bash
-python maze_gui.py
+python3 maze_gui.py
 ```
 
-or:
+From the GUI you can:
+
+1. Pick an algorithm.
+2. Load a sample maze or open a maze file.
+3. Generate a normal maze or a weighted maze.
+4. Click `Solve` to show the explored cells and final path.
+5. Click `Animate` to watch the search and runner movement.
+6. Use `Compare` to run every algorithm on the same maze.
+7. Save generated mazes or export the latest run.
+
+## Command-Line Usage
+
+Solve a sample maze:
 
 ```bash
-python maze_runner.py sample_mazes/maze1.mz --gui
+python3 maze_runner.py sample_mazes/maze1.mz --algorithm astar
 ```
 
-The app shows file-based sample mazes in a selector, has controls for generated
-maze size and seed, and has separate buttons for normal and weighted generation.
-Generated mazes stay unsolved until Solve or Animate is clicked. The legend
-explains the visual result: blue cells are discovered cells, yellow is the final
-path, green is the start, red is the goal, and numbered cells are weighted
-terrain.
-
-## Run from the command line
+Run a weighted algorithm:
 
 ```bash
-python maze_runner.py sample_mazes/maze1.mz --algorithm astar
-python maze_runner.py sample_mazes/maze1.mz --algorithm bidirectional
-python maze_runner.py sample_mazes/maze2.mz --algorithm bfs
-python maze_runner.py sample_mazes/weighted_maze.mz --algorithm dijkstra
-python maze_runner.py sample_mazes/weighted_maze.mz --algorithm bellmanford
-python maze_runner.py --generate 20 12 --seed 42 --algorithm astar
+python3 maze_runner.py sample_mazes/weighted_maze.mz --algorithm dijkstra
+python3 maze_runner.py sample_mazes/weighted_maze.mz --algorithm bellmanford
 ```
 
-The command writes:
+Generate and solve a deterministic maze:
 
-- `sample_output/exploration.csv`: cells explored by the algorithm.
-- `sample_output/statistics.txt`: algorithm, path length, path cost, route, and runner actions.
+```bash
+python3 maze_runner.py --generate 20 12 --seed 42 --algorithm bidirectional
+```
 
-## Maze format
+Open the GUI through the CLI:
 
-Maze files are plain text. The outer `#` border is optional but supported.
+```bash
+python3 maze_runner.py sample_mazes/maze1.mz --gui
+```
 
-- `#` is a blocked cell.
-- `.` or a space is an open cell.
-- `S` marks the start.
-- `G` marks the goal.
-- `1` to `9` are open cells with movement cost, useful for Dijkstra and A*.
+Supported command-line algorithm names:
 
-If a file does not contain `S` or `G`, the default start is bottom-left `(0, 0)`
-and the default goal is top-right.
+```text
+astar, dijkstra, bellmanford, greedy, bidirectional, bfs, dfs
+```
 
-Generated mazes can also be saved from the GUI as `.maze` files. Those files use
-JSON so internal walls and weighted cells can be loaded back exactly as they
-were generated.
+The CLI writes results to `sample_output/` by default:
 
-## Project structure
+- `exploration.csv`: cells visited by the selected algorithm.
+- `statistics.txt`: algorithm name, maze size, start/goal, path length, path
+  cost, final route, and runner actions.
 
-- `maze.py`: maze model, parser, wall helpers, and practice-maze generation.
-- `graph_algorithms.py`: BFS, Bidirectional BFS, DFS, Dijkstra, Bellman-Ford,
-  Greedy Best-First, A*, and shared result objects.
-- `runner.py`: runner orientation, movement, exploration, and action conversion.
-- `maze_runner.py`: command-line interface and output file writer.
-- `maze_gui.py`: real-time visualiser.
+## Optional Installation
+
+The project can also be installed in editable mode:
+
+```bash
+python3 -m pip install -e .
+```
+
+After that, these commands are available:
+
+```bash
+maze-gui
+maze-runner sample_mazes/maze1.mz --algorithm astar
+```
+
+## Running Tests
+
+```bash
+python3 -m unittest discover -s tests
+```
+
+The tests cover:
+
+- ASCII maze parsing.
+- Generated maze save/load round trips.
+- BFS shortest paths.
+- Weighted path choice with Dijkstra, A*, and Bellman-Ford.
+- Generated maze connectivity across all algorithms.
+- Density-based weighted-cell generation.
+- Conversion from coordinate paths to runner movement actions.
+
+## Maze File Formats
+
+### Text `.mz` Files
+
+Text maze files are easy to read and edit by hand.
+
+```text
+#######
+#S..2G#
+#.###.#
+#.....#
+#######
+```
+
+Characters:
+
+- `#`: blocked cell.
+- `.` or a space: open cell.
+- `S`: start.
+- `G`: goal.
+- `1` to `9`: open weighted cell with that movement cost.
+
+If `S` or `G` is missing, the default start is bottom-left and the default goal
+is top-right.
+
+### Saved `.maze` Files
+
+Generated mazes can contain internal wall segments that cannot be represented
+perfectly by the simple text format. The GUI saves these as JSON-backed `.maze`
+files so generated walls, weighted cells, start, and goal can be loaded back
+exactly.
+
+## Project Structure
+
+```text
+graph-maze-pathfinder/
+├── graph_algorithms.py     # BFS, DFS, Dijkstra, A*, Bellman-Ford, Greedy, Bi-BFS
+├── maze.py                 # Maze model, parsing, generation, save/load
+├── maze_gui.py             # Tkinter desktop application
+├── maze_runner.py          # Command-line interface and export writer
+├── runner.py               # Runner orientation and movement action conversion
+├── sample_mazes/           # Hand-written sample maze files
+├── sample_output/          # Example exported results
+├── tests/                  # Unit tests
+└── pyproject.toml          # Project metadata and console entry points
+```
+
+## Design Notes
+
+- The maze model is separated from the algorithms and UI. This keeps the search
+  code testable without opening the GUI.
+- Search functions return a `SearchResult` containing the final path, explored
+  order, total cost, and metadata. The GUI and CLI both use the same result
+  object.
+- Weighted algorithms use the cost of entering a cell. Unweighted algorithms
+  still run on weighted mazes, but the GUI explains when they are not guaranteed
+  to find the cheapest weighted route.
+- Generated mazes are connected by construction using randomized DFS carving.
+- The runner layer converts graph paths into orientation-aware actions such as
+  `F`, `RF`, and `LF`.
+
+## Current Limitations
+
+- The GUI is intentionally built with Tkinter to avoid external dependencies;
+  it is functional rather than custom-rendered with a game engine.
+- Bellman-Ford is included for algorithmic comparison, although all generated
+  terrain costs are positive and Dijkstra/A* are more efficient for this use
+  case.
+- The project currently supports rectangular grid mazes with four-directional
+  movement.
+
+## Possible Next Steps
+
+- Add diagonal movement as an optional mode.
+- Add heuristic selection for A* and Greedy Best-First Search.
+- Add maze editing directly on the canvas.
+- Export screenshots of solved mazes from the GUI.
+- Add performance charts comparing algorithms over multiple generated mazes.
