@@ -1,159 +1,159 @@
-from typing import Optional, Tuple, List
-from maze import get_dimensions
-from maze import get_walls
+"""Runner movement helpers.
+
+The runner keeps position and orientation, while pathfinding operates on graph
+cells. This module bridges those ideas by turning cell paths into movement
+commands and by retaining the original left-hand exploration behaviour.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import List, Optional, Tuple
+
+from maze import DIRECTIONS, DIRECTION_VECTORS, Maze, Position, get_dimensions, get_walls
 
 
-def create_runner(x: int = 0, y: int = 0, orientation: str = "N"):
-    """
-    The runner is represented as a dict with keys "x", "y"
-     and "orientation".
-    A dict is easy to mutate in-place and pass to other functions.
-    """
-    return {"x": x, "y": y, "orientation": orientation}
+ActionStep = Tuple[int, int, str]
 
 
-def get_x(runner):
-    return runner["x"]
+@dataclass
+class Runner:
+    x: int = 0
+    y: int = 0
+    orientation: str = "N"
+
+    @property
+    def position(self) -> Position:
+        return self.x, self.y
 
 
-def get_y(runner):
-    return runner["y"]
+def create_runner(x: int = 0, y: int = 0, orientation: str = "N") -> Runner:
+    if orientation not in DIRECTIONS:
+        raise ValueError(f"Invalid orientation: {orientation}")
+    return Runner(x=x, y=y, orientation=orientation)
 
 
-def get_orientation(runner):
-    return runner["orientation"]
+def get_x(runner: Runner) -> int:
+    return runner.x
 
 
-def turn(runner, direction: str):
-    """turn()/forward() update the runner in-place and also return it."""
-    orientation = runner["orientation"]
+def get_y(runner: Runner) -> int:
+    return runner.y
 
-    if direction == "Left":
-        if orientation == "N":
-            runner["orientation"] = "W"
-        elif orientation == "W":
-            runner["orientation"] = "S"
-        elif orientation == "S":
-            runner["orientation"] = "E"
-        elif orientation == "E":
-            runner["orientation"] = "N"
-    elif direction == "Right":
-        if orientation == "N":
-            runner["orientation"] = "E"
-        elif orientation == "E":
-            runner["orientation"] = "S"
-        elif orientation == "S":
-            runner["orientation"] = "W"
-        elif orientation == "W":
-            runner["orientation"] = "N"
 
+def get_orientation(runner: Runner) -> str:
+    return runner.orientation
+
+
+def turn(runner: Runner, direction: str) -> Runner:
+    current_index = DIRECTIONS.index(runner.orientation)
+    if direction in {"Left", "L"}:
+        runner.orientation = DIRECTIONS[(current_index - 1) % 4]
+    elif direction in {"Right", "R"}:
+        runner.orientation = DIRECTIONS[(current_index + 1) % 4]
+    elif direction in {"Back", "B"}:
+        runner.orientation = DIRECTIONS[(current_index + 2) % 4]
+    else:
+        raise ValueError("Turn direction must be Left, Right, Back, L, R, or B")
     return runner
 
 
-def forward(runner):
-    orientation = runner["orientation"]
-
-    if orientation == "N":
-        runner["y"] = runner["y"] + 1
-    elif orientation == "S":
-        runner["y"] = runner["y"] - 1
-    elif orientation == "E":
-        runner["x"] = runner["x"] + 1
-    elif orientation == "W":
-        runner["x"] = runner["x"] - 1
-
+def forward(runner: Runner) -> Runner:
+    dx, dy = DIRECTION_VECTORS[runner.orientation]
+    runner.x += dx
+    runner.y += dy
     return runner
 
 
-def sense_walls(runner, maze) -> Tuple[bool, bool, bool]:
-    """Checking whether there is a wall on the Left,
-    the Front, and the Right of the runner."""
-    x = runner["x"]
-    y = runner["y"]
-    orientation = runner["orientation"]
-
-    """Reusing maze.get_walls() to check for the walls of a specific cell"""
-    north, east, south, west = get_walls(maze, x, y)
-
-    """Mapping the walls of a specific cell to a specific direction"""
-    if orientation == "N":
-        left_wall = west
-        front_wall = north
-        right_wall = east
-
-    elif orientation == "E":
-        left_wall = north
-        front_wall = east
-        right_wall = south
-
-    elif orientation == "S":
-        left_wall = east
-        front_wall = south
-        right_wall = west
-
-    elif orientation == "W":
-        left_wall = south
-        front_wall = west
-        right_wall = north
-
-    return left_wall, front_wall, right_wall
+def sense_walls(runner: Runner, maze: Maze) -> Tuple[bool, bool, bool]:
+    north, east, south, west = get_walls(maze, runner.x, runner.y)
+    by_direction = {"N": north, "E": east, "S": south, "W": west}
+    index = DIRECTIONS.index(runner.orientation)
+    left = by_direction[DIRECTIONS[(index - 1) % 4]]
+    front = by_direction[runner.orientation]
+    right = by_direction[DIRECTIONS[(index + 1) % 4]]
+    return left, front, right
 
 
-def go_straight(runner, maze):
-    """Checks the front wall, if present raises ValueError."""
-    left_wall, front_wall, right_wall = sense_walls(runner, maze)
-
+def go_straight(runner: Runner, maze: Maze) -> Runner:
+    _left_wall, front_wall, _right_wall = sense_walls(runner, maze)
     if front_wall:
         raise ValueError("There is a wall in front of the runner")
-
     return forward(runner)
 
 
-def move(runner, maze):
-    """Using a left-hug: checks left, then straight, then right,
-    and goes back of all are blocked."""
+def move(runner: Runner, maze: Maze) -> Tuple[Runner, str]:
     left_wall, front_wall, right_wall = sense_walls(runner, maze)
-
-    # L + F
     if not left_wall:
         turn(runner, "Left")
         forward(runner)
         return runner, "LF"
-
-    # F
     if not front_wall:
         forward(runner)
         return runner, "F"
-
-    # 3. R + F
     if not right_wall:
         turn(runner, "Right")
         forward(runner)
         return runner, "RF"
-
-    # 4. "B"
-    turn(runner, "Left")
-    turn(runner, "Left")
+    turn(runner, "Back")
     forward(runner)
-    return runner, "B"
+    return runner, "BF"
 
 
 def explore(
-    runner, maze, goal: Optional[Tuple[int, int]] = None
-) -> List[Tuple[int, int, str]]:
-    """Explores the maze.
-    Stores the position BEFORE the move"""
+    runner: Runner,
+    maze: Maze,
+    goal: Optional[Position] = None,
+    max_steps: Optional[int] = None,
+) -> List[ActionStep]:
     width, height = get_dimensions(maze)
+    goal = goal or maze.goal or (width - 1, height - 1)
+    max_steps = max_steps or max(50, width * height * 8)
+    path: List[ActionStep] = []
 
-    # If goal is not defined, defines it as the top right corner
-    if goal is None:
-        goal = (width - 1, height - 1)
-
-    path: List[Tuple[int, int, str]] = []
-
-    while (runner["x"], runner["y"]) != goal:
-        x, y = runner["x"], runner["y"]
+    for _ in range(max_steps):
+        if runner.position == goal:
+            return path
+        x, y = runner.position
         runner, actions = move(runner, maze)
         path.append((x, y, actions))
 
-    return path
+    raise RuntimeError("Exploration did not reach the goal before max_steps")
+
+
+def positions_to_actions(
+    positions: List[Position],
+    starting_orientation: str = "N",
+) -> List[ActionStep]:
+    if len(positions) < 2:
+        return []
+
+    result: List[ActionStep] = []
+    orientation = starting_orientation
+
+    for current, nxt in zip(positions, positions[1:]):
+        dx = nxt[0] - current[0]
+        dy = nxt[1] - current[1]
+        move_direction = _direction_from_delta(dx, dy)
+        diff = (DIRECTIONS.index(move_direction) - DIRECTIONS.index(orientation)) % 4
+
+        if diff == 0:
+            turn_code = ""
+        elif diff == 1:
+            turn_code = "R"
+        elif diff == 2:
+            turn_code = "B"
+        else:
+            turn_code = "L"
+
+        result.append((current[0], current[1], f"{turn_code}F"))
+        orientation = move_direction
+
+    return result
+
+
+def _direction_from_delta(dx: int, dy: int) -> str:
+    for direction, vector in DIRECTION_VECTORS.items():
+        if vector == (dx, dy):
+            return direction
+    raise ValueError(f"Path contains non-adjacent step: delta {(dx, dy)}")
