@@ -7,6 +7,16 @@ weighted cells affect path cost.
 The project includes a Tkinter GUI, a command-line runner, generated mazes,
 weighted terrain, file import/export, and unit tests for the core logic.
 
+## Key Skills Demonstrated
+
+- Graph algorithms: BFS, DFS, Dijkstra, Bellman-Ford, Greedy Best-First, A*
+- Data structures: graphs, queues, stacks, priority queues, parent maps
+- GUI development with Tkinter
+- Object-oriented Python design
+- Unit testing with `unittest`
+- File parsing, JSON save/load, CSV/text export
+- Algorithm analysis and comparison
+
 ## Features
 
 - Visual maze solving with animation, step mode, and algorithm comparison.
