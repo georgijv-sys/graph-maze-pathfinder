@@ -133,6 +133,8 @@ def write_statistics(
         file.write(f"Coursework score estimate: {score}\n")
         file.write(f"Path positions: {path_positions}\n")
         file.write(f"Runner actions: {action_steps}\n")
+
+
 def print_summary(result: SearchResult, output_dir: Path) -> None:
     if not result.found:
         print(f"{result.algorithm} could not find a path from {result.start} to {result.goal}.")

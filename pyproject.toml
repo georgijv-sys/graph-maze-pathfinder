@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graph-maze-pathfinder"
+version = "1.0.0"
+description = "Graph-based maze pathfinding visualiser with weighted and unweighted search algorithms."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+maze-runner = "maze_runner:main"
+maze-gui = "maze_gui:run_gui"
+
+[tool.setuptools]
+py-modules = [
+    "graph_algorithms",
+    "maze",
+    "maze_gui",
+    "maze_runner",
+    "runner",
+]
