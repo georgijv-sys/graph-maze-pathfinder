@@ -120,6 +120,29 @@ class Maze:
             raise ValueError("Vertical wall outside maze bounds")
         self.vertical_walls.add((vertical_line, y))
 
+    def clear_cell(self, position: Position, remove_adjacent_walls: bool = False) -> None:
+        """Open a cell and optionally carve through its internal wall borders."""
+        if not self.in_bounds(position):
+            return
+        self.blocked.discard(position)
+        self.weights.pop(position, None)
+        if remove_adjacent_walls:
+            self.remove_adjacent_walls(position)
+
+    def remove_adjacent_walls(self, position: Position) -> None:
+        """Remove internal walls around a cell without deleting the outer border."""
+        if not self.in_bounds(position):
+            return
+        x, y = position
+        if y > 0:
+            self.horizontal_walls.discard((x, y))
+        if y < self.height - 1:
+            self.horizontal_walls.discard((x, y + 1))
+        if x > 0:
+            self.vertical_walls.discard((x, y))
+        if x < self.width - 1:
+            self.vertical_walls.discard((x + 1, y))
+
     def to_ascii(
         self,
         path: Optional[Iterable[Position]] = None,
