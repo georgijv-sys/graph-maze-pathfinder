@@ -47,6 +47,16 @@ class MazeParsingTests(unittest.TestCase):
         self.assertEqual(loaded.vertical_walls, maze.vertical_walls)
         self.assertEqual(loaded.weights, maze.weights)
 
+    def test_clear_cell_can_open_generated_wall_segments(self):
+        maze = create_perfect_maze(6, 5, seed=1)
+        before = len(maze.horizontal_walls) + len(maze.vertical_walls)
+
+        maze.clear_cell((2, 2), remove_adjacent_walls=True)
+
+        after = len(maze.horizontal_walls) + len(maze.vertical_walls)
+        self.assertLess(after, before)
+        self.assertNotIn((2, 2), maze.blocked)
+
 
 class AlgorithmTests(unittest.TestCase):
     def test_bfs_finds_shortest_unweighted_path(self):
