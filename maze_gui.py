@@ -37,6 +37,7 @@ ALGORITHMS: Dict[str, str] = {
     "BFS":               "bfs",
     "DFS":               "dfs",
 }
+NON_COST_OPTIMAL_WEIGHTED = {"bfs", "dfs", "bidirectional", "greedy"}
 ALGORITHM_INFO: Dict[str, Dict[str, str]] = {
     "A*": {
         "meta": "O(E log V)  ·  space O(V)  ·  optimal",
@@ -125,7 +126,8 @@ class MazeApp:
     def __init__(self, root: tk.Tk, initial_maze_path: Optional[str] = None):
         self.root = root
         self.root.title("Maze Lab")
-        self.root.minsize(1060, 660)
+        self.root.minsize(1180, 820)
+        self._set_initial_window_size(1280, 880)
         self.root.configure(bg=P.page)
 
         # State vars
@@ -160,7 +162,7 @@ class MazeApp:
         self.origin_x  = self.margin
         self.origin_y  = self.margin
 
-        self._edit_btns: Dict[str, tk.Button] = {}
+        self._edit_btns: Dict[str, tk.Label] = {}
         self.metric_chips: Dict[str, tk.Label] = {}
 
         self._configure_styles()
@@ -184,6 +186,15 @@ class MazeApp:
                   fieldbackground=[("readonly", P.side2)],
                   selectbackground=[("readonly", P.accent)])
         # Spinbox and Scale use tk widgets directly — no ttk style needed
+
+    def _set_initial_window_size(self, width: int, height: int) -> None:
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        width = min(width, max(1060, screen_width - 80))
+        height = min(height, max(760, screen_height - 100))
+        x = max(0, (screen_width - width) // 2)
+        y = max(0, (screen_height - height) // 2)
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
 
     # ── Layout ────────────────────────────────────────────────────────────────
 
@@ -315,12 +326,14 @@ class MazeApp:
             eg.columnconfigure(col, weight=1)
         for i, (mode, label) in enumerate(EDIT_MODES):
             row, col = divmod(i, 3)
-            b = tk.Button(eg, text=label, font=("Helvetica", 9),
-                          bd=0, relief="flat",
-                          bg=P.side_border, fg=P.text,
-                          activebackground=P.side_hover, activeforeground=P.text,
-                          cursor="hand2", padx=4, pady=5,
-                          command=lambda m=mode: self._set_mode(m))
+            b = self._click_label(
+                eg,
+                label,
+                lambda _event, m=mode: self._set_mode(m),
+                font=("Helvetica", 9),
+                padx=4,
+                pady=5,
+            )
             b.grid(row=row, column=col, padx=(0, 4), pady=(0, 4), sticky="ew")
             self._edit_btns[mode] = b
         self._set_mode("navigate")
@@ -352,29 +365,21 @@ class MazeApp:
         self._btn(p, "Export Run", self.export_run,
                   full=True).pack(fill="x", padx=16, pady=(0, 6))
 
-        # ── Stats ──────────────────────────────────────────────────────────────
-        self._sep(p)
-        self._sh(p, "STATS")
-        self._stats_lbl = tk.Label(
-            p, text="", bg=P.side, fg=P.muted,
-            font=("Helvetica", 9), wraplength=212, justify="left",
-        )
-        self._stats_lbl.pack(anchor="nw", padx=16, pady=(0, 16))
-
     # ── Stage ─────────────────────────────────────────────────────────────────
 
     def _build_stage(self, p: tk.Frame) -> None:
         # Top bar: status left, metric chips right
-        topbar = tk.Frame(p, bg=P.page, height=44)
+        topbar = tk.Frame(p, bg=P.page, height=70)
         topbar.pack(fill="x")
         topbar.pack_propagate(False)
 
         tk.Label(topbar, textvariable=self.status_var,
                  bg=P.page, fg="#64748b",
-                 font=("Helvetica", 10)).pack(side="left", padx=18, pady=10)
+                 font=("Helvetica", 10), wraplength=430, justify="left").pack(
+                     side="left", padx=18, pady=16)
 
         chips = tk.Frame(topbar, bg=P.page)
-        chips.pack(side="right", padx=14, pady=7)
+        chips.pack(side="right", padx=14, pady=10)
         for key, label in [("algorithm", "Algorithm"), ("explored", "Explored"),
                             ("length", "Length"), ("cost", "Cost"), ("weights", "Weights")]:
             card = tk.Frame(chips, bg="#eef2ff",
@@ -390,9 +395,12 @@ class MazeApp:
         # Divider
         tk.Frame(p, bg="#dde3f0", height=1).pack(fill="x")
 
+        content = tk.Frame(p, bg=P.page)
+        content.pack(fill="both", expand=True)
+
         # Canvas frame
-        cf = tk.Frame(p, bg=P.canvas_bg)
-        cf.pack(fill="both", expand=True)
+        cf = tk.Frame(content, bg=P.canvas_bg)
+        cf.pack(side="left", fill="both", expand=True)
         self.canvas = tk.Canvas(cf, bg=P.canvas_bg, highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<Configure>", lambda _e: self.draw())
@@ -400,6 +408,18 @@ class MazeApp:
         self.canvas.bind("<B1-Motion>", self._on_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_release)
         self.canvas.bind("<Button-3>", self._on_right_click)
+
+        stats_panel = tk.Frame(content, bg="#f8faff", width=230,
+                               highlightthickness=1, highlightbackground="#dde3f0")
+        stats_panel.pack(side="right", fill="y")
+        stats_panel.pack_propagate(False)
+        tk.Label(stats_panel, text="Run Stats", bg="#f8faff", fg=P.side,
+                 font=("Helvetica", 12, "bold")).pack(anchor="w", padx=16, pady=(18, 8))
+        self._stats_lbl = tk.Label(
+            stats_panel, text="", bg="#f8faff", fg="#475569",
+            font=("Helvetica", 10), wraplength=190, justify="left",
+        )
+        self._stats_lbl.pack(anchor="nw", fill="x", padx=16, pady=(0, 16))
 
     # ── Sidebar widget helpers ────────────────────────────────────────────────
 
@@ -411,26 +431,58 @@ class MazeApp:
                  font=("Helvetica", 8, "bold")).pack(anchor="w", padx=16, pady=(0, 6))
 
     def _btn(self, parent: tk.Widget, text: str, command,
-             primary: bool = False, full: bool = False) -> tk.Button:
+             primary: bool = False, full: bool = False) -> tk.Label:
         bg  = P.accent    if primary else P.side_border
         abg = P.accent_dk if primary else P.side_hover
-        return tk.Button(
-            parent, text=text, command=command,
-            bg=bg, fg=P.white,
-            activebackground=abg, activeforeground=P.white,
+        return self._click_label(
+            parent,
+            text,
+            lambda _event: command(),
+            bg=bg,
+            hover_bg=abg,
             font=("Helvetica", 10, "bold" if primary else "normal"),
-            bd=0, relief="flat", padx=10, pady=8, cursor="hand2",
+            padx=10,
+            pady=8,
         )
+
+    def _click_label(
+        self,
+        parent: tk.Widget,
+        text: str,
+        command,
+        *,
+        bg: str = P.side_border,
+        hover_bg: str = P.side_hover,
+        font=("Helvetica", 10),
+        padx: int = 10,
+        pady: int = 8,
+    ) -> tk.Label:
+        label = tk.Label(
+            parent,
+            text=text,
+            bg=bg,
+            fg=P.white,
+            font=font,
+            padx=padx,
+            pady=pady,
+            cursor="hand2",
+        )
+        label.bind("<Button-1>", command)
+        label.bind("<Enter>", lambda _event: label.configure(bg=hover_bg))
+        label.bind("<Leave>", lambda _event: label.configure(bg=bg))
+        return label
 
     # ── Edit mode ─────────────────────────────────────────────────────────────
 
     def _set_mode(self, mode: str) -> None:
         self.edit_mode.set(mode)
         for key, btn in self._edit_btns.items():
+            bg = P.accent if key == mode else P.side_border
             btn.configure(
-                bg=P.accent if key == mode else P.side_border,
+                bg=bg,
                 fg=P.white,
             )
+            btn.bind("<Leave>", lambda _event, b=btn, c=bg: b.configure(bg=c))
         if hasattr(self, "canvas"):
             self.canvas.configure(cursor="crosshair" if mode != "navigate" else "")
 
@@ -493,20 +545,20 @@ class MazeApp:
         self._invalidate()
 
     def _unblock(self, pos: Position) -> None:
-        self.maze.blocked.discard(pos)
+        self.maze.clear_cell(pos, remove_adjacent_walls=True)
         self._invalidate()
 
     def _set_start(self, pos: Position) -> None:
         if pos == self.maze.goal:
             return
-        self.maze.blocked.discard(pos)
+        self.maze.clear_cell(pos)
         self.maze.start = pos
         self._invalidate()
 
     def _set_goal(self, pos: Position) -> None:
         if pos == self.maze.start:
             return
-        self.maze.blocked.discard(pos)
+        self.maze.clear_cell(pos)
         self.maze.goal = pos
         self._invalidate()
 
@@ -514,9 +566,10 @@ class MazeApp:
         if not self.maze.is_open(pos) or pos in {self.maze.start, self.maze.goal}:
             return
         cur = self.maze.weights.get(pos, 1)
-        self.maze.weights[pos] = max(2, cur + 1) if cur < 9 else None  # type: ignore[assignment]
-        if self.maze.weights[pos] is None:
-            del self.maze.weights[pos]
+        if cur < 9:
+            self.maze.weights[pos] = max(2, cur + 1)
+        else:
+            self.maze.weights.pop(pos, None)
         self._invalidate()
 
     def _invalidate(self) -> None:
@@ -551,7 +604,11 @@ class MazeApp:
     def _refresh_algo_info(self) -> None:
         info = ALGORITHM_INFO.get(self.algo_var.get(), {})
         self._algo_meta.configure(text=info.get("meta", ""))
-        self._algo_desc.configure(text=info.get("about", ""))
+        about = info.get("about", "")
+        warning = self._weighted_warning()
+        if warning:
+            about = f"{about}\n\n{warning}"
+        self._algo_desc.configure(text=about)
 
     # ── File ops ──────────────────────────────────────────────────────────────
 
@@ -668,15 +725,20 @@ class MazeApp:
         if self._step_index < total:
             self._step_index += 1
             self.display_visited = r.visited_order[:self._step_index]
-            self.display_path    = []
-            self.status_var.set(
-                f"Step {self._step_index}/{total} — {r.algorithm}.  Space = next step.")
-            self._update_stats(
-                f"Step mode: {r.algorithm}\n"
-                f"Visited {self._step_index} / {total} cells\n\n"
-                f"Space → advance one step\n"
-                f"S → jump to full result"
-            )
+            if self._step_index == total:
+                self.result = r
+                self.display_path = list(r.path)
+                self._show_result()
+            else:
+                self.display_path = []
+                self.status_var.set(
+                    f"Step {self._step_index}/{total} — {r.algorithm}.  Space = next step.")
+                self._update_stats(
+                    f"Step mode: {r.algorithm}\n"
+                    f"Visited {self._step_index} / {total} cells\n\n"
+                    f"Space → advance one step\n"
+                    f"S → jump to full result"
+                )
         else:
             self.result = r
             self.display_path = list(r.path)
@@ -740,6 +802,8 @@ class MazeApp:
         self.display_visited = self.display_path = []
         self.display_runner  = None
         self.status_var.set(msg)
+        if hasattr(self, "_algo_desc"):
+            self._refresh_algo_info()
         self._update_stats(self._maze_summary())
         self._clear_chips()
         self.draw()
@@ -1026,10 +1090,14 @@ class MazeApp:
             self._update_stats("No path found.")
             return
         note = ""
-        if self.maze.weights and self._algo_key() in {"bfs", "dfs", "bidirectional", "greedy"}:
-            note = ("\n\nNote: this algorithm ignores terrain weights.\n"
-                    "Use Dijkstra, A*, or Bellman-Ford for cost-optimal paths.")
-        self.status_var.set(f"{self.result.algorithm} solved it.")
+        warning = self._weighted_warning(self.result.algorithm)
+        if warning:
+            note = f"\n\n{warning}"
+        self.status_var.set(
+            f"{self.result.algorithm} solved it."
+            if not warning
+            else f"{self.result.algorithm} solved it — not cost-optimal on weighted graphs."
+        )
         self._update_stats(
             f"Algorithm:  {self.result.algorithm}\n"
             f"Discovered: {self.result.explored_count} cells\n"
@@ -1053,6 +1121,15 @@ class MazeApp:
         for c in self.metric_chips.values():
             c.configure(text="—")
         self.metric_chips["weights"].configure(text=str(len(self.maze.weights)))
+
+    def _weighted_warning(self, algorithm_name: Optional[str] = None) -> str:
+        if not self.maze.weights or self._algo_key() not in NON_COST_OPTIMAL_WEIGHTED:
+            return ""
+        name = algorithm_name or self.algo_var.get()
+        return (
+            f"{name} is not optimal for weighted graphs. "
+            "Use Dijkstra, A*, or Bellman-Ford for cheapest paths."
+        )
 
     def _update_stats(self, text: str) -> None:
         if hasattr(self, "_stats_lbl"):
@@ -1124,14 +1201,18 @@ class MazeApp:
         return create_perfect_maze(14, 10, seed=4)
 
     def _bind_keys(self) -> None:
-        self.root.bind("<space>", lambda _: self.step())
+        self.root.bind("<space>", lambda event: self.step() if self._shortcut_allowed(event) else None)
         for k in ("r", "R"):
-            self.root.bind(k, lambda _: self._reset("View reset."))
+            self.root.bind(k, lambda event: self._reset("View reset.") if self._shortcut_allowed(event) else None)
         for k in ("s", "S"):
-            self.root.bind(k, lambda _: self.solve())
+            self.root.bind(k, lambda event: self.solve() if self._shortcut_allowed(event) else None)
         for k in ("a", "A"):
-            self.root.bind(k, lambda _: self.animate())
-        self.root.bind("<Escape>", lambda _: self._cancel_anim())
+            self.root.bind(k, lambda event: self.animate() if self._shortcut_allowed(event) else None)
+        self.root.bind("<Escape>", lambda event: self._cancel_anim())
+
+    def _shortcut_allowed(self, event: tk.Event) -> bool:
+        widget_class = event.widget.winfo_class()
+        return widget_class not in {"Entry", "Spinbox", "TSpinbox", "TCombobox"}
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
