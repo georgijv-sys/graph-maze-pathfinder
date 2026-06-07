@@ -118,6 +118,11 @@ class P:
     wall_color  = "#1a2332"
     white       = "#ffffff"
     black       = "#000000"
+    # Status text states
+    status_info    = "#64748b"
+    status_running = "#4554d4"
+    status_success = "#15803d"
+    status_error   = "#dc2626"
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -156,6 +161,7 @@ class MazeApp:
         self._step_result:   Optional[SearchResult] = None
         self._step_index     = 0
         self._drag_blocking: Optional[bool] = None
+        self._no_path_banner = False
 
         self.cell_size = 28
         self.margin    = 18
@@ -373,10 +379,11 @@ class MazeApp:
         topbar.pack(fill="x")
         topbar.pack_propagate(False)
 
-        tk.Label(topbar, textvariable=self.status_var,
-                 bg=P.page, fg="#64748b",
-                 font=("Helvetica", 10), wraplength=430, justify="left").pack(
-                     side="left", padx=18, pady=16)
+        self._status_lbl = tk.Label(
+            topbar, textvariable=self.status_var,
+            bg=P.page, fg=P.status_info,
+            font=("Helvetica", 11), wraplength=430, justify="left")
+        self._status_lbl.pack(side="left", padx=18, pady=16)
 
         chips = tk.Frame(topbar, bg=P.page)
         chips.pack(side="right", padx=14, pady=10)
@@ -477,11 +484,13 @@ class MazeApp:
     def _set_mode(self, mode: str) -> None:
         self.edit_mode.set(mode)
         for key, btn in self._edit_btns.items():
-            bg = P.accent if key == mode else P.side_border
-            btn.configure(
-                bg=bg,
-                fg=P.white,
-            )
+            active = key == mode
+            bg    = P.accent    if active else P.side_border
+            hover = P.accent_dk if active else P.side_hover
+            btn.configure(bg=bg, fg=P.white)
+            # Rebind both Enter and Leave so the active button keeps a sensible
+            # highlight instead of reverting to the inactive grey on hover.
+            btn.bind("<Enter>", lambda _event, b=btn, c=hover: b.configure(bg=c))
             btn.bind("<Leave>", lambda _event, b=btn, c=bg: b.configure(bg=c))
         if hasattr(self, "canvas"):
             self.canvas.configure(cursor="crosshair" if mode != "navigate" else "")
@@ -576,10 +585,11 @@ class MazeApp:
         self._cancel_anim()
         self.result = self._step_result = None
         self._step_index = 0
+        self._no_path_banner = False
         self.display_visited = self.display_path = []
         self.display_runner = None
         self._clear_chips()
-        self.status_var.set("Maze edited — press Solve or Animate.")
+        self._set_status("Maze edited — press Solve or Animate.", kind="info")
         self._update_stats(self._maze_summary())
         self.draw()
 
@@ -666,7 +676,7 @@ class MazeApp:
         try:
             save_maze(self.maze, path)
             self.last_path = Path(path)
-            self.status_var.set(f"Saved  {self.last_path.name}.")
+            self._set_status(f"Saved  {self.last_path.name}.", kind="success")
         except Exception as exc:
             messagebox.showerror("Save failed", str(exc))
 
@@ -687,17 +697,18 @@ class MazeApp:
             for i, (x, y) in enumerate(self.result.visited_order, 1):
                 w.writerow([i, x, y, "goal" if (x, y) == self.result.goal else "visited"])
         (out / "statistics.txt").write_text(self._stats_text(self.result), encoding="utf-8")
-        self.status_var.set("Exported  exploration.csv + statistics.txt.")
+        self._set_status("Exported  exploration.csv + statistics.txt.", kind="success")
 
     # ── Solve / Step / Animate / Compare ─────────────────────────────────────
 
     def solve(self) -> None:
         self._cancel_anim()
         self._step_result = None
+        self._no_path_banner = False
         try:
             self.result = solve_maze(self.maze, self._algo_key())
         except Exception as exc:
-            self.status_var.set(str(exc))
+            self._set_status(str(exc), kind="error")
             return
         self.display_visited = list(self.result.visited_order)
         self.display_path    = list(self.result.path)
@@ -709,10 +720,11 @@ class MazeApp:
         """Advance the algorithm one cell at a time.  Press Space repeatedly."""
         self._cancel_anim()
         if self._step_result is None:
+            self._no_path_banner = False
             try:
                 self._step_result = solve_maze(self.maze, self._algo_key())
             except Exception as exc:
-                self.status_var.set(str(exc))
+                self._set_status(str(exc), kind="error")
                 return
             self._step_index = 0
             self.display_visited = self.display_path = []
@@ -731,8 +743,9 @@ class MazeApp:
                 self._show_result()
             else:
                 self.display_path = []
-                self.status_var.set(
-                    f"Step {self._step_index}/{total} — {r.algorithm}.  Space = next step.")
+                self._set_status(
+                    f"Step {self._step_index}/{total} — {r.algorithm}.  Space = next step.",
+                    kind="running")
                 self._update_stats(
                     f"Step mode: {r.algorithm}\n"
                     f"Visited {self._step_index} / {total} cells\n\n"
@@ -748,30 +761,39 @@ class MazeApp:
     def animate(self) -> None:
         self._cancel_anim()
         self._step_result = None
+        self._no_path_banner = False
         try:
             self.result = solve_maze(self.maze, self._algo_key())
         except Exception as exc:
-            self.status_var.set(str(exc))
-            return
-        if not self.result.found:
-            self._show_result()
-            self.draw()
+            self._set_status(str(exc), kind="error")
             return
         self.display_visited = self.display_path = []
         self.display_runner  = None
         self._update_chips(self.result)
-        self.status_var.set(f"Animating {self.result.algorithm}…")
-        self._update_stats("Animation running.\n\nBlue cells = nodes the algorithm visits.")
+        if self.result.found:
+            self._set_status(f"Animating {self.result.algorithm}…", kind="running")
+            self._update_stats("Animation running.\n\nBlue cells = nodes the algorithm visits.")
+        else:
+            self._set_status(f"{self.result.algorithm} searching…", kind="running")
+            self._update_stats(
+                "Searching every reachable cell…\n\n"
+                "Blue cells = nodes the algorithm visits."
+            )
         self._anim_visit(0)
 
     def compare_all(self) -> None:
         self._cancel_anim()
         self._step_result = None
-        results: List[SearchResult] = []
-        lines:   List[str]          = []
-        for label, key in ALGORITHMS.items():
-            r = solve_maze(self.maze, key)
-            results.append(r)
+        self._no_path_banner = False
+        try:
+            results: List[SearchResult] = [
+                solve_maze(self.maze, key) for key in ALGORITHMS.values()
+            ]
+        except Exception as exc:
+            self._set_status(str(exc), kind="error")
+            return
+        lines: List[str] = []
+        for label, r in zip(ALGORITHMS, results):
             cost = f"{r.cost:g}" if r.found else "∞"
             lines.append(f"{label}:  {r.explored_count} cells,  cost {cost},  len {r.path_length}")
 
@@ -783,7 +805,12 @@ class MazeApp:
         self.display_visited = []
         self.display_path    = list(best.path) if best else []
         self.display_runner  = None
-        self.status_var.set("Compared all algorithms — best-cost path shown.")
+        if best:
+            self._set_status("Compared all algorithms — best-cost path shown.", kind="success")
+        else:
+            self._no_path_banner = True
+            self._set_status(
+                "Compared all algorithms — none could reach the goal.", kind="error")
         self._update_stats("\n".join(lines))
         self._clear_chips()
         if best:
@@ -799,9 +826,10 @@ class MazeApp:
         self._step_result = None
         self._step_index  = 0
         self.result       = None
+        self._no_path_banner = False
         self.display_visited = self.display_path = []
         self.display_runner  = None
-        self.status_var.set(msg)
+        self._set_status(msg, kind="info")
         if hasattr(self, "_algo_desc"):
             self._refresh_algo_info()
         self._update_stats(self._maze_summary())
@@ -966,6 +994,10 @@ class MazeApp:
         if self.display_runner is not None:
             self._draw_runner(self.display_runner, self.display_dir)
 
+        # ── 6. No-path banner (overlay, drawn last so nothing hides it) ──────
+        if self._no_path_banner:
+            self._draw_no_path_banner(cw, ch)
+
     def _draw_marker(self, pos: Position, color: str, letter: str) -> None:
         x1, y1, x2, y2 = self._cell_box(pos)
         cs  = self.cell_size
@@ -1033,6 +1065,47 @@ class MazeApp:
                                 fill=P.white, width=max(2, cs // 10),
                                 capstyle="round")
 
+    def _round_rect(self, x1, y1, x2, y2, r, **kwargs):
+        """Draw a rounded rectangle on the canvas and return its item id."""
+        r = min(r, abs(x2 - x1) / 2, abs(y2 - y1) / 2)
+        points = [
+            x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r,
+            x2, y2 - r, x2, y2, x2 - r, y2, x1 + r, y2,
+            x1, y2, x1, y2 - r, x1, y1 + r, x1, y1,
+        ]
+        return self.canvas.create_polygon(points, smooth=True, **kwargs)
+
+    def _draw_no_path_banner(self, cw: int, ch: int) -> None:
+        """A bold, centred banner so the user can't miss an unsolvable maze."""
+        explored = self.result.explored_count if self.result else 0
+        algo = self.result.algorithm if self.result else "Search"
+        subtitle = f"{algo} explored {explored} cells — the goal is walled off."
+
+        bw = min(440, max(280, cw - 60))
+        bh = 104
+        cx, cy = cw // 2, ch // 2
+        x1, y1 = cx - bw // 2, cy - bh // 2
+        x2, y2 = cx + bw // 2, cy + bh // 2
+
+        # Soft drop shadow, then the card and its accent border.
+        self._round_rect(x1 + 4, y1 + 6, x2 + 4, y2 + 6, 20,
+                         fill="#cbd5e1", outline="")
+        self._round_rect(x1, y1, x2, y2, 20,
+                         fill="#fef2f2", outline="#ef4444", width=2)
+        # Red accent stripe down the left edge.
+        self._round_rect(x1, y1, x1 + 12, y2, 20, fill="#ef4444", outline="")
+        self.canvas.create_rectangle(x1 + 8, y1, x1 + 12, y2,
+                                     fill="#ef4444", outline="")
+
+        self.canvas.create_text(
+            cx + 6, cy - 16, text="⚠  No path found",
+            fill="#b91c1c", font=("Helvetica", 17, "bold"),
+        )
+        self.canvas.create_text(
+            cx + 6, cy + 16, text=subtitle,
+            fill="#991b1b", font=("Helvetica", 10),
+        )
+
     def _heat_color(self, index: int, total: int) -> str:
         t = index / max(total - 1, 1)
         # Pale blue (#dbeafe) → deep indigo (#1e40af)
@@ -1059,8 +1132,14 @@ class MazeApp:
         self.draw()
         if index < len(self.result.visited_order):
             self.animation_id = self.root.after(self._delay(), self._anim_visit, index + 1)
-        else:
+        elif self.result.found:
             self._anim_runner(0)
+        else:
+            # Search finished with no route — keep the explored cells on screen
+            # and reveal the prominent "no path" banner.
+            self.display_visited = list(self.result.visited_order)
+            self._show_result()
+            self.draw()
 
     def _anim_runner(self, index: int) -> None:
         if self.result is None:
@@ -1086,17 +1165,30 @@ class MazeApp:
             return
         self._update_chips(self.result)
         if not self.result.found:
-            self.status_var.set(f"{self.result.algorithm} — no path found.")
-            self._update_stats("No path found.")
+            self._no_path_banner = True
+            self._set_status(
+                f"{self.result.algorithm} — no path found. "
+                f"The goal is walled off from the start.",
+                kind="error",
+            )
+            self._update_stats(
+                "✗  NO PATH FOUND\n\n"
+                f"{self.result.algorithm} searched the whole reachable area\n"
+                f"({self.result.explored_count} cells) but the goal is\n"
+                "sealed off from the start.\n\n"
+                "Try Erase to open a wall, or Generate a\nnew maze."
+            )
             return
+        self._no_path_banner = False
         note = ""
         warning = self._weighted_warning(self.result.algorithm)
         if warning:
             note = f"\n\n{warning}"
-        self.status_var.set(
+        self._set_status(
             f"{self.result.algorithm} solved it."
             if not warning
-            else f"{self.result.algorithm} solved it — not cost-optimal on weighted graphs."
+            else f"{self.result.algorithm} solved it — not cost-optimal on weighted graphs.",
+            kind="success",
         )
         self._update_stats(
             f"Algorithm:  {self.result.algorithm}\n"
@@ -1130,6 +1222,17 @@ class MazeApp:
             f"{name} is not optimal for weighted graphs. "
             "Use Dijkstra, A*, or Bellman-Ford for cheapest paths."
         )
+
+    def _set_status(self, text: str, kind: str = "info") -> None:
+        colors = {
+            "info":    P.status_info,
+            "running": P.status_running,
+            "success": P.status_success,
+            "error":   P.status_error,
+        }
+        self.status_var.set(text)
+        if hasattr(self, "_status_lbl"):
+            self._status_lbl.configure(fg=colors.get(kind, P.status_info))
 
     def _update_stats(self, text: str) -> None:
         if hasattr(self, "_stats_lbl"):
