@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maze Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root {
+  /* ── Surfaces (dark instrument) ── */
+  --bg:        oklch(0.165 0.006 285);
+  --panel:     oklch(0.196 0.007 285);
+  --panel-2:   oklch(0.232 0.008 285);
+  --raised:    oklch(0.265 0.010 285);
+  --maze-bg:   oklch(0.140 0.005 285);
+  --line:      oklch(1 0 0 / 0.075);
+  --line-2:    oklch(1 0 0 / 0.14);
+  --text:      oklch(0.965 0.004 285);
+  --muted:     oklch(0.72 0.013 285);
+  --dim:       oklch(0.535 0.013 285);
+
+  /* ── Accent (tweakable) ── */
+  --accent:    oklch(0.66 0.19 290);
+  --accent-2:  oklch(0.60 0.20 290);
+  --accent-lt: oklch(0.80 0.10 290);
+  --accent-ink: oklch(0.99 0 0);
+  --accent-soft: oklch(0.66 0.19 290 / 0.14);
+
+  /* ── Data / visualization palette ── */
+  --c-frontier: oklch(0.74 0.13 228);
+  --c-path:     oklch(0.84 0.14 88);
+  --c-path-line:oklch(0.80 0.16 74);
+  --c-start:    oklch(0.76 0.15 158);
+  --c-goal:     oklch(0.66 0.21 22);
+  --c-weight:   oklch(0.70 0.16 300);
+  --c-wall:     oklch(0.62 0.014 285);
+  --c-block:    oklch(0.305 0.010 285);
+  --c-open:     oklch(0.215 0.008 285);
+
+  --radius:   13px;
+  --radius-sm: 9px;
+  --shadow: 0 1px 0 oklch(1 0 0 / 0.04) inset, 0 12px 34px -18px oklch(0 0 0 / 0.7);
+  --font:  "Space Grotesk", system-ui, sans-serif;
+  --mono:  "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* ── Light stage variant (tweakable) ── */
+.theme-light {
+  --bg:        oklch(0.955 0.004 285);
+  --panel:     oklch(0.99 0.002 285);
+  --panel-2:   oklch(0.975 0.004 285);
+  --raised:    oklch(0.945 0.006 285);
+  --maze-bg:   oklch(0.995 0.001 285);
+  --line:      oklch(0 0 0 / 0.085);
+  --line-2:    oklch(0 0 0 / 0.16);
+  --text:      oklch(0.24 0.012 285);
+  --muted:     oklch(0.46 0.012 285);
+  --dim:       oklch(0.60 0.012 285);
+  --maze-bg:   oklch(0.985 0.002 285);
+  --c-wall:    oklch(0.42 0.012 285);
+  --c-block:   oklch(0.40 0.012 285);
+  --c-open:    oklch(0.96 0.004 285);
+  --shadow: 0 1px 0 oklch(1 0 0 / 0.7) inset, 0 16px 38px -22px oklch(0 0 0 / 0.28);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+::selection { background: var(--accent-soft); }
+
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input, select { font-family: inherit; }
+/* Suppress transitions during theme/accent swaps so var()-based colours re-resolve
+   (Chromium keeps a transitioned property's old used-value when its var changes). */
+.no-anim, .no-anim * { transition: none !important; }
+
+/* ── App scaffold ── */
+.app {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: 50px 1fr;
+}
+
+/* ── Title bar ── */
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px 0 18px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  position: relative;
+  z-index: 30;
+}
+.tb-dots { display: flex; gap: 8px; }
+.tb-dots i {
+  width: 11px; height: 11px; border-radius: 50%; display: block;
+  background: var(--line-2);
+}
+.brand { display: flex; align-items: center; gap: 11px; margin-left: 4px; }
+.mark {
+  width: 26px; height: 26px; border-radius: 7px;
+  background: linear-gradient(150deg, var(--accent), var(--accent-2));
+  display: grid; place-items: center;
+  box-shadow: 0 0 0 1px oklch(1 0 0 / 0.12) inset, 0 4px 12px -4px var(--accent);
+}
+.mark svg { width: 15px; height: 15px; }
+.brand .name {
+  font-weight: 700; font-size: 15px; letter-spacing: 0.14em;
+}
+.brand .name b { font-weight: 700; }
+.brand .sub {
+  font-family: var(--mono); font-size: 10px; color: var(--dim);
+  letter-spacing: 0.04em; margin-top: 1px;
+}
+.tb-spacer { flex: 1; }
+.tb-meta {
+  display: flex; align-items: center; gap: 18px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+}
+.tb-meta .k { color: var(--dim); }
+.tb-meta .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--line-2); }
+
+/* ── Body grid ── */
+.body {
+  display: grid;
+  grid-template-columns: 300px 1fr 304px;
+  min-height: 0;
+}
+
+/* ── Generic panels ── */
+.sidebar, .inspector {
+  background: var(--panel);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.sidebar { border-right: 1px solid var(--line); }
+.inspector { border-left: 1px solid var(--line); }
+.sidebar::-webkit-scrollbar, .inspector::-webkit-scrollbar { width: 9px; }
+.sidebar::-webkit-scrollbar-thumb, .inspector::-webkit-scrollbar-thumb {
+  background: var(--line-2); border-radius: 9px; border: 3px solid transparent; background-clip: padding-box;
+}
+
+/* ── Section headers ── */
+.sh {
+  display: flex; align-items: center; gap: 9px;
+  padding: 0 18px; margin: 22px 0 11px;
+}
+.sh .tick { width: 3px; height: 12px; border-radius: 2px; background: var(--accent); }
+.sh .label {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.13em;
+  color: var(--muted); text-transform: uppercase;
+}
+.sh .hint { font-size: 10px; color: var(--dim); margin-left: auto; font-family: var(--mono); }
+.sec { padding: 0 18px; }
+.sec.first { margin-top: 20px; }
+
+/* ── Custom select ── */
+.field { position: relative; }
+.field select {
+  appearance: none; width: 100%;
+  background-color: var(--panel-2); color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 11px 36px 11px 13px; font-size: 13.5px; font-weight: 500;
+  cursor: pointer; transition: border-color .15s, background-color .15s;
+}
+.field select:hover { background-color: var(--raised); }
+.field select:focus { outline: none; border-color: var(--accent); }
+.field::after {
+  content: ""; position: absolute; right: 14px; top: 50%; pointer-events: none;
+  width: 8px; height: 8px; border-right: 1.6px solid var(--muted); border-bottom: 1.6px solid var(--muted);
+  transform: translateY(-65%) rotate(45deg);
+}
+
+/* algo meta + about */
+.algo-meta {
+  font-family: var(--mono); font-size: 10px; color: var(--accent-lt);
+  margin: 9px 0 0; line-height: 1.5; letter-spacing: 0.01em;
+}
+.algo-about {
+  font-size: 11.5px; color: var(--muted); line-height: 1.55; margin-top: 7px;
+  text-wrap: pretty;
+}
+.algo-warn {
+  display: none; margin-top: 9px; padding: 9px 11px;
+  background: oklch(0.66 0.21 22 / 0.12); border: 1px solid oklch(0.66 0.21 22 / 0.3);
+  border-radius: var(--radius-sm); font-size: 11px; color: oklch(0.82 0.12 30); line-height: 1.5;
+}
+.algo-warn.show { display: block; }
+
+/* ── Buttons ── */
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%; padding: 11px 12px; border-radius: var(--radius-sm);
+  background-color: var(--panel-2); color: var(--text);
+  font-size: 13px; font-weight: 500; letter-spacing: 0.01em;
+  border: 1px solid var(--line); transition: background-color .14s, border-color .14s, transform .04s;
+  position: relative;
+}
+.btn:hover { background-color: var(--raised); }
+.btn:active { transform: translateY(1px); }
+.btn .kbd {
+  font-family: var(--mono); font-size: 9.5px; color: var(--dim);
+  border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 5px; margin-left: 2px;
+}
+.btn.primary {
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+  color: var(--accent-ink); font-weight: 600; font-size: 14px;
+  border-color: transparent; padding: 13px;
+  box-shadow: 0 0 0 1px oklch(1 0 0 / 0.1) inset, 0 6px 18px -8px var(--accent);
+}
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.primary .kbd { color: var(--accent-ink); border-color: oklch(1 0 0 / 0.3); opacity: .8; }
+.btn.icon { width: auto; padding: 11px; }
+.row { display: flex; gap: 7px; }
+.row > * { flex: 1; }
+.stack > * + * { margin-top: 7px; }
+
+/* ── Slider ── */
+.slider-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin: 14px 0 7px;
+}
+.slider-head .lab { font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; color: var(--dim); text-transform: uppercase; }
+.slider-head .val { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+input[type=range] {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+  background: var(--line-2); border-radius: 4px; cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%;
+  background: var(--accent); border: 2.5px solid var(--panel);
+  box-shadow: 0 0 0 1px var(--accent); cursor: grab;
+}
+input[type=range]::-moz-range-thumb {
+  width: 15px; height: 15px; border-radius: 50%; background: var(--accent);
+  border: 2.5px solid var(--panel); box-shadow: 0 0 0 1px var(--accent); cursor: grab;
+}
+
+/* ── Toggle ── */
+.toggle { display: flex; align-items: center; gap: 10px; margin-top: 13px; cursor: pointer; user-select: none; }
+.toggle .sw {
+  width: 36px; height: 20px; border-radius: 11px; background-color: var(--panel-2);
+  border: 1px solid var(--line-2); position: relative; transition: background-color .16s, border-color .16s; flex: none;
+}
+.toggle .sw::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--muted); transition: transform .16s, background .16s;
+}
+.toggle.on .sw { background: var(--accent-soft); border-color: var(--accent); }
+.toggle.on .sw::after { transform: translateX(16px); background: var(--accent); }
+.toggle .tlab { font-size: 12px; color: var(--muted); }
+
+/* ── Number inputs (maze size) ── */
+.sizes { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.numfield { display: flex; align-items: center; gap: 6px; }
+.numfield .nl { font-size: 11px; font-weight: 600; color: var(--dim); }
+.numfield input {
+  width: 46px; background-color: var(--panel-2); color: var(--text);
+  border: 1px solid var(--line); border-radius: 7px; padding: 7px 8px;
+  font-family: var(--mono); font-size: 12px; text-align: center;
+}
+.numfield input:focus { outline: none; border-color: var(--accent); }
+.numfield.seed input { width: 58px; }
+
+/* ── Draw tool grid ── */
+.tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.tool {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 10px 4px 8px; border-radius: var(--radius-sm);
+  background-color: var(--panel-2); border: 1px solid var(--line);
+  font-size: 11px; color: var(--muted); transition: background-color .14s, border-color .14s, color .14s;
+}
+.tool:hover { background-color: var(--raised); color: var(--text); }
+.tool svg { width: 16px; height: 16px; }
+.tool.active {
+  background-color: var(--accent-soft); border-color: var(--accent); color: var(--accent-lt);
+}
+.tool.active svg { color: var(--accent-lt); }
+
+/* ── Stage (center) ── */
+.stage { display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+.readout {
+  display: flex; align-items: center; gap: 18px;
+  padding: 14px 22px; border-bottom: 1px solid var(--line);
+}
+.status { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.status .led {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: none;
+  box-shadow: 0 0 0 0 transparent;
+}
+.status.info .led { background: var(--dim); }
+.status.running .led { background: var(--accent); box-shadow: 0 0 10px 1px var(--accent); animation: pulse 1.1s ease-in-out infinite; }
+.status.success .led { background: var(--c-start); box-shadow: 0 0 8px 0 var(--c-start); }
+.status.error .led { background: var(--c-goal); box-shadow: 0 0 8px 0 var(--c-goal); }
+@keyframes pulse { 50% { opacity: .35; } }
+.status .txt { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status.success .txt { color: var(--c-start); }
+.status.error .txt { color: oklch(0.78 0.13 25); }
+.status.running .txt { color: var(--accent-lt); }
+
+.kpis { display: flex; gap: 9px; margin-left: auto; }
+.kpi {
+  min-width: 70px; padding: 7px 13px 8px; border-radius: var(--radius-sm);
+  background: var(--panel); border: 1px solid var(--line);
+}
+.kpi .kl { font-size: 8.5px; font-weight: 600; letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
+.kpi .kv { font-family: var(--mono); font-size: 18px; font-weight: 600; color: var(--text); margin-top: 2px; line-height: 1; }
+.kpi.accent .kv { color: var(--accent-lt); }
+
+.canvas-wrap { flex: 1; min-height: 0; padding: 22px; display: flex; }
+.canvas-card {
+  flex: 1; position: relative; border-radius: var(--radius);
+  background: var(--maze-bg); border: 1px solid var(--line);
+  box-shadow: var(--shadow); overflow: hidden;
+}
+#maze { display: block; width: 100%; height: 100%; }
+.maze-hud {
+  position: absolute; left: 14px; bottom: 12px; pointer-events: none;
+  font-family: var(--mono); font-size: 10px; color: var(--dim);
+  letter-spacing: 0.04em; display: flex; gap: 12px;
+}
+
+/* ── Inspector (right) ── */
+.insp-title {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 18px 0;
+}
+.insp-title h2 { font-size: 14px; font-weight: 600; letter-spacing: 0.01em; }
+.insp-title .badge {
+  font-family: var(--mono); font-size: 10px; color: var(--accent-lt);
+  padding: 3px 8px; border-radius: 6px; background: var(--accent-soft); border: 1px solid oklch(0.66 0.19 290 / 0.25);
+}
+.statgrid { padding: 4px 18px 0; }
+.statline {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 9px 0; border-bottom: 1px solid var(--line);
+}
+.statline .sk { font-size: 11.5px; color: var(--dim); }
+.statline .sv { font-family: var(--mono); font-size: 12.5px; color: var(--text); font-weight: 500; }
+.statline .sv.big { font-size: 14px; color: var(--accent-lt); }
+
+.legend { padding: 4px 18px 0; display: grid; gap: 9px; }
+.legend .li { display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: var(--muted); }
+.legend .sw {
+  width: 15px; height: 15px; border-radius: 4px; flex: none; border: 1px solid var(--line-2);
+}
+.legend .sw.round { border-radius: 50%; border: none; }
+
+.note {
+  margin: 4px 18px 0; padding: 11px 13px; border-radius: var(--radius-sm);
+  background: var(--panel-2); border: 1px solid var(--line);
+  font-size: 11.5px; color: var(--muted); line-height: 1.55; text-wrap: pretty;
+}
+.spacer-lg { height: 22px; }
+
+/* compare result rows */
+.cmp-list { padding: 2px 18px 0; display: grid; gap: 6px; }
+.cmp-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
+  padding: 8px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line);
+}
+.cmp-row.best { border-color: var(--accent); background: var(--accent-soft); }
+.cmp-row .cn { font-size: 11.5px; font-weight: 500; }
+.cmp-row .cs { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+
+/* ── Modal (compare chart) ── */
+.modal-bg {
+  position: fixed; inset: 0; background: oklch(0.1 0.005 285 / 0.66);
+  backdrop-filter: blur(4px); display: none; place-items: center; z-index: 100;
+}
+.modal-bg.show { display: grid; }
+.modal {
+  width: min(760px, 92vw); max-height: 86vh; overflow: hidden;
+  background: var(--panel); border: 1px solid var(--line-2); border-radius: 16px;
+  box-shadow: 0 30px 80px -30px oklch(0 0 0 / 0.8); display: flex; flex-direction: column;
+}
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+.modal-head h3 { font-size: 15px; font-weight: 600; }
+.modal-head .ms { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 3px; }
+.modal-close { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--muted); border: 1px solid var(--line); }
+.modal-close:hover { background: var(--raised); color: var(--text); }
+.modal-body { padding: 20px 22px 24px; overflow-y: auto; }
+.bar-row { display: grid; grid-template-columns: 132px 1fr; gap: 12px; align-items: center; margin-bottom: 11px; }
+.bar-row .bn { font-size: 12px; font-weight: 600; text-align: right; }
+.bar-track { position: relative; height: 30px; }
+.bar-fill { height: 100%; border-radius: 7px; min-width: 4px; transition: width .5s cubic-bezier(.2,.7,.3,1); }
+.bar-stat { position: absolute; left: 0; top: 0; height: 100%; display: flex; align-items: center; padding-left: 11px; font-family: var(--mono); font-size: 10.5px; color: var(--text); white-space: nowrap; }
+
+/* ── Tweaks panel ── */
+.tweaks {
+  position: fixed; top: 62px; right: 16px; width: 256px; z-index: 80;
+  background: var(--panel); border: 1px solid var(--line-2); border-radius: 14px;
+  box-shadow: 0 24px 60px -28px oklch(0 0 0 / 0.8); display: none; overflow: hidden;
+}
+.tweaks.show { display: block; }
+.tweaks-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 15px; border-bottom: 1px solid var(--line); cursor: grab; }
+.tweaks-head .tt { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.tweaks-body { padding: 14px 15px 16px; }
+.tw-sec + .tw-sec { margin-top: 16px; }
+.tw-lab { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+.swatches { display: flex; gap: 8px; }
+.swatch { width: 28px; height: 28px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; transition: transform .1s; }
+.swatch:hover { transform: scale(1.08); }
+.swatch.sel { border-color: var(--text); }
+.seg { display: flex; gap: 4px; background: var(--panel-2); padding: 3px; border-radius: 9px; }
+.seg button { flex: 1; padding: 7px 4px; border-radius: 6px; font-size: 11px; color: var(--muted); }
+.seg button.sel { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+.tweaks-fab {
+  position: fixed; bottom: 18px; right: 18px; z-index: 70;
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+  background: var(--panel); border: 1px solid var(--line-2); border-radius: 11px;
+  font-size: 12px; font-weight: 500; color: var(--muted);
+  box-shadow: 0 14px 34px -18px oklch(0 0 0 / 0.7);
+}
+.tweaks-fab:hover { color: var(--text); border-color: var(--accent); }
+.tweaks-fab svg { width: 15px; height: 15px; }
+
+@media (max-width: 1180px) {
+  .body { grid-template-columns: 280px 1fr; }
+  .inspector { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <!-- ── Title bar ── -->
+  <div class="titlebar">
+    <div class="tb-dots"><i></i><i></i><i></i></div>
+    <div class="brand">
+      <div class="mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 17h5V7h5" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="5" cy="17" r="2" fill="white"/><circle cx="17" cy="7" r="2" fill="white"/></svg>
+      </div>
+      <div>
+        <div class="name">MAZE<b>·</b>LAB</div>
+        <div class="sub">graph pathfinding visualiser</div>
+      </div>
+    </div>
+    <div class="tb-spacer"></div>
+    <div class="tb-meta">
+      <span><span class="k">grid</span> <span id="tb-size">—</span></span>
+      <span class="dot"></span>
+      <span><span class="k">open</span> <span id="tb-open">—</span></span>
+      <span class="dot"></span>
+      <span><span class="k">seed</span> <span id="tb-seed">—</span></span>
+    </div>
+  </div>
+
+  <div class="body">
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar" id="sidebar">
+      <!-- Algorithm -->
+      <div class="sh"><span class="tick"></span><span class="label">Algorithm</span></div>
+      <div class="sec">
+        <div class="field">
+          <select id="algo">
+            <option>A*</option>
+            <option>Dijkstra</option>
+            <option>Bellman-Ford</option>
+            <option>Greedy Best-First</option>
+            <option>Bidirectional BFS</option>
+            <option>BFS</option>
+            <option>DFS</option>
+          </select>
+        </div>
+        <div class="algo-meta" id="algo-meta"></div>
+        <div class="algo-about" id="algo-about"></div>
+        <div class="algo-warn" id="algo-warn"></div>
+      </div>
+
+      <!-- Run -->
+      <div class="sh"><span class="tick"></span><span class="label">Run</span></div>
+      <div class="sec stack">
+        <button class="btn primary" id="b-solve">Solve <span class="kbd">S</span></button>
+        <div class="row">
+          <button class="btn" id="b-animate">Animate <span class="kbd">A</span></button>
+          <button class="btn" id="b-step">Step <span class="kbd">␣</span></button>
+        </div>
+        <div class="row">
+          <button class="btn" id="b-compare">Compare</button>
+          <button class="btn" id="b-reset">Reset <span class="kbd">R</span></button>
+        </div>
+        <div class="slider-head"><span class="lab">Animation speed</span><span class="val" id="speed-val">65</span></div>
+        <input type="range" id="speed" min="10" max="120" value="65" />
+        <div class="toggle" id="heat-toggle">
+          <div class="sw"></div><span class="tlab">Heatmap (discovery order)</span>
+        </div>
+      </div>
+
+      <!-- Maze -->
+      <div class="sh"><span class="tick"></span><span class="label">Maze</span></div>
+      <div class="sec">
+        <div class="sizes">
+          <div class="numfield"><span class="nl">W</span><input id="m-w" type="number" min="5" max="40" value="18" /></div>
+          <div class="numfield"><span class="nl">H</span><input id="m-h" type="number" min="5" max="26" value="12" /></div>
+          <div class="numfield seed"><span class="nl">Seed</span><input id="m-seed" type="text" placeholder="rnd" /></div>
+        </div>
+        <div class="row" style="margin-top:11px">
+          <button class="btn" id="b-generate">Generate</button>
+          <button class="btn" id="b-weighted">+ Weighted</button>
+        </div>
+        <div class="slider-head"><span class="lab">Weight density</span><span class="val" id="dens-val">25%</span></div>
+        <input type="range" id="density" min="5" max="70" value="25" />
+      </div>
+
+      <!-- Draw -->
+      <div class="sh"><span class="tick"></span><span class="label">Draw</span><span class="hint">click · drag</span></div>
+      <div class="sec">
+        <div class="tools" id="tools"></div>
+      </div>
+
+      <!-- Files -->
+      <div class="sh"><span class="tick"></span><span class="label">Files</span></div>
+      <div class="sec stack">
+        <div class="field">
+          <select id="samples"></select>
+        </div>
+        <div class="row">
+          <button class="btn" id="b-load">Load Sample</button>
+          <button class="btn" id="b-open">Open…</button>
+        </div>
+        <div class="row">
+          <button class="btn" id="b-blank">New Blank</button>
+          <button class="btn" id="b-save">Save…</button>
+        </div>
+        <button class="btn" id="b-export">Export Run</button>
+      </div>
+      <div class="spacer-lg"></div>
+    </aside>
+
+    <!-- ── Stage ── -->
+    <main class="stage">
+      <div class="readout">
+        <div class="status info" id="status">
+          <span class="led"></span>
+          <span class="txt" id="status-txt">Ready.</span>
+        </div>
+        <div class="kpis">
+          <div class="kpi accent"><div class="kl">Algorithm</div><div class="kv" id="kpi-algo">—</div></div>
+          <div class="kpi"><div class="kl">Explored</div><div class="kv" id="kpi-explored">—</div></div>
+          <div class="kpi"><div class="kl">Length</div><div class="kv" id="kpi-length">—</div></div>
+          <div class="kpi"><div class="kl">Cost</div><div class="kv" id="kpi-cost">—</div></div>
+          <div class="kpi"><div class="kl">Weights</div><div class="kv" id="kpi-weights">—</div></div>
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <div class="canvas-card">
+          <canvas id="maze"></canvas>
+          <div class="maze-hud" id="maze-hud"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ── Inspector ── -->
+    <aside class="inspector" id="inspector">
+      <div class="insp-title"><h2>Inspector</h2><span class="badge" id="insp-badge">idle</span></div>
+      <div class="statgrid" id="statgrid"></div>
+      <div class="sh"><span class="tick"></span><span class="label">Legend</span></div>
+      <div class="legend">
+        <div class="li"><span class="sw round" style="background:var(--c-start)"></span> Start</div>
+        <div class="li"><span class="sw round" style="background:var(--c-goal)"></span> Goal</div>
+        <div class="li"><span class="sw" style="background:var(--c-frontier)"></span> Explored frontier</div>
+        <div class="li"><span class="sw" style="background:var(--c-path)"></span> Shortest path</div>
+        <div class="li"><span class="sw" style="background:var(--c-weight);opacity:.5"></span> Weighted terrain</div>
+        <div class="li"><span class="sw" style="background:var(--c-block)"></span> Wall / blocked</div>
+      </div>
+      <div class="sh"><span class="tick"></span><span class="label">Notes</span></div>
+      <div class="note" id="insp-note">Pick an algorithm and press <b>Solve</b>, or <b>Animate</b> to watch the search expand cell by cell.</div>
+      <div class="spacer-lg"></div>
+    </aside>
+  </div>
+</div>
+
+<!-- Compare modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3>Algorithm Comparison</h3>
+        <div class="ms" id="modal-sub"></div>
+      </div>
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- Tweaks -->
+<button class="tweaks-fab" id="tweaks-fab">
+  <svg viewBox="0 0 24 24" fill="none"><path d="M5 7h9M5 12h14M5 17h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="17" cy="7" r="2.4" fill="currentColor"/><circle cx="9" cy="17" r="2.4" fill="currentColor"/></svg>
+  Tweaks
+</button>
+<div class="tweaks" id="tweaks">
+  <div class="tweaks-head"><span class="tt">Tweaks</span><button class="modal-close" id="tweaks-close" style="width:24px;height:24px">✕</button></div>
+  <div class="tweaks-body">
+    <div class="tw-sec">
+      <div class="tw-lab">Accent</div>
+      <div class="swatches" id="tw-accent"></div>
+    </div>
+    <div class="tw-sec">
+      <div class="tw-lab">Stage theme</div>
+      <div class="seg" id="tw-theme">
+        <button data-v="dark" class="sel">Dark</button>
+        <button data-v="light">Light</button>
+      </div>
+    </div>
+    <div class="tw-sec">
+      <div class="tw-lab">Cell style</div>
+      <div class="seg" id="tw-cellstyle">
+        <button data-v="tile" class="sel">Tiles</button>
+        <button data-v="flat">Flat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file-input" accept=".mz,.maze,.json,.txt" style="display:none" />
+
+<script src="js/maze.js"></script>
+<script src="js/algorithms.js"></script>
+<script src="js/render.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
