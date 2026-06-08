@@ -72,9 +72,16 @@ def main() -> None:
         default=str(DEFAULT_OUTPUT_DIR),
         help="Directory for exploration.csv and statistics.txt.",
     )
-    parser.add_argument("--gui", action="store_true", help="Open the real-time maze visualiser.")
+    parser.add_argument("--gui", action="store_true", help="Open the real-time Tkinter maze visualiser.")
+    parser.add_argument("--web", action="store_true",
+                        help="Open the polished web UI in a desktop window (needs pywebview).")
 
     args = parser.parse_args()
+
+    if args.web:
+        from desktop import run as run_desktop
+
+        raise SystemExit(run_desktop())
 
     if args.gui:
         from maze_gui import run_gui
