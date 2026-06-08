@@ -47,11 +47,23 @@ The project uses only the Python standard library.
 
 ## Run
 
-Start the GUI:
+Start the Tkinter GUI (pure standard library, no dependencies):
 
 ```bash
 python3 maze_gui.py
 ```
+
+Open the polished web UI as a native **desktop app** (recommended). This renders
+`web/index.html` in a real application window via [pywebview](https://pywebview.flowrl.com/):
+
+```bash
+python3 -m pip install pywebview   # one-time, optional dependency
+python3 desktop.py                 # or:  python3 maze_runner.py --web
+```
+
+The desktop shell ships a faithful JavaScript port of the same seven algorithms,
+so it runs fully offline with no backend process. Or just open `web/index.html`
+directly in any browser.
 
 Run from the command line:
 
@@ -143,6 +155,8 @@ maze.py               maze model, parsing, generation, save/load
 maze_gui.py           Tkinter GUI
 maze_runner.py        command-line interface and exports
 runner.py             runner orientation and movement actions
+desktop.py            native desktop shell for the web UI (pywebview)
+web/                  HTML/CSS/JS front-end + JavaScript port of the engine
 sample_mazes/         sample maze files
 sample_output/        example output files
 tests/                unit tests

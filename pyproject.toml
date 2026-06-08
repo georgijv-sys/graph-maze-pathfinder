@@ -10,9 +10,16 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
 
+# The core (engine, CLI, Tkinter GUI, tests) has zero dependencies.
+# The polished web-based desktop shell is opt-in:
+#     python3 -m pip install ".[desktop]"
+[project.optional-dependencies]
+desktop = ["pywebview>=5.0"]
+
 [project.scripts]
 maze-runner = "maze_runner:main"
 maze-gui = "maze_gui:run_gui"
+maze-desktop = "desktop:run"
 
 [tool.setuptools]
 py-modules = [
@@ -21,4 +28,5 @@ py-modules = [
     "maze_gui",
     "maze_runner",
     "runner",
+    "desktop",
 ]
