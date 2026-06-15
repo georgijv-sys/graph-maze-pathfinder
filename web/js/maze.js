@@ -14,6 +14,17 @@ const DIRECTION_VECTORS = {
 const key = (x, y) => x + "," + y;
 const fromKey = (k) => k.split(",").map(Number);
 
+// Mirror Python's round() (banker's rounding, half-to-even) so the JS port
+// produces the same weighted-cell count as maze.py. Math.round rounds halves
+// up, which diverges from Python at exact .5 values (e.g. 14.5 -> 14 not 15).
+function pyRound(n) {
+  const floor = Math.floor(n);
+  const frac = n - floor;
+  if (frac < 0.5) return floor;
+  if (frac > 0.5) return floor + 1;
+  return floor % 2 === 0 ? floor : floor + 1;
+}
+
 class Maze {
   constructor(width, height, opts = {}) {
     if (width <= 0 || height <= 0) throw new Error("Maze dimensions must be positive");
@@ -26,6 +37,22 @@ class Maze {
     this.start = opts.start || [0, 0];
     this.goal = opts.goal || [width - 1, height - 1];
     this._addOuterWalls();
+    this._validateCells();
+  }
+
+  // Mirror maze.py's _validate_cells so a malformed file fails fast and
+  // identically across both implementations, instead of silently producing a
+  // broken maze that only errors later at solve time.
+  _validateCells() {
+    for (const c of [...this.blocked, ...this.weights.keys()]) {
+      const [x, y] = fromKey(c);
+      if (!this.inBounds([x, y])) throw new Error("Cell outside maze bounds: " + c);
+    }
+    for (const cost of this.weights.values()) {
+      if (cost < 1) throw new Error("Movement cost must be >= 1: " + cost);
+    }
+    if (!this.isOpen(this.start)) throw new Error("Start cell is blocked or outside bounds: " + this.start);
+    if (this.goal && !this.isOpen(this.goal)) throw new Error("Goal cell is blocked or outside bounds: " + this.goal);
   }
 
   _addOuterWalls() {
@@ -208,7 +235,7 @@ function addRandomWeights(maze, { density = 0.2, minimum = 2, maximum = 9, seed 
     const j = Math.floor(rng() * (i + 1));
     [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
   }
-  let target = Math.round(candidates.length * density);
+  let target = pyRound(candidates.length * density);
   if (density > 0 && candidates.length) target = Math.max(1, target);
   for (const [x, y] of candidates.slice(0, target)) {
     maze.weights.set(key(x, y), minimum + Math.floor(rng() * (maximum - minimum + 1)));
@@ -246,7 +273,8 @@ function parseAsciiMaze(text) {
       if (char === "#") blocked.push(k);
       else if (char === "S") start = [x, y];
       else if (char === "G") goal = [x, y];
-      else if (/[1-9]/.test(char)) weights.push([k, parseInt(char, 10)]);
+      // Only 2-9 are weighted terrain; '0'/'1' cost the same as an open cell.
+      else if (/[2-9]/.test(char)) weights.push([k, parseInt(char, 10)]);
     });
   });
 

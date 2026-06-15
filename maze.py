@@ -55,6 +55,9 @@ class Maze:
         for cell in self.blocked | set(self.weights):
             if not self.in_bounds(cell):
                 raise ValueError(f"Cell outside maze bounds: {cell}")
+        for cell, weight in self.weights.items():
+            if weight < 1:
+                raise ValueError(f"Movement cost must be >= 1: {cell} = {weight}")
         if not self.is_open(self.start):
             raise ValueError(f"Start cell is blocked or outside bounds: {self.start}")
         if self.goal is not None and not self.is_open(self.goal):
@@ -224,9 +227,13 @@ def parse_ascii_maze(text: str) -> Maze:
                 start = position
             elif char == "G":
                 goal = position
-            elif char.isdigit() and char != "0":
-                weights[position] = int(char)
-            elif char not in {".", " ", "0"}:
+            elif char.isdigit():
+                # Only 2-9 are weighted terrain; '0' and '1' cost the same as a
+                # plain open cell, so storing them would mislabel them as weighted.
+                weight = int(char)
+                if weight >= 2:
+                    weights[position] = weight
+            elif char not in {".", " "}:
                 raise ValueError(f"Unsupported maze character {char!r} at {(x, y)}")
 
     return Maze(

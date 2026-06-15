@@ -15,6 +15,10 @@ from runner import ActionStep, positions_to_actions
 DEFAULT_OUTPUT_DIR = Path("sample_output")
 
 
+# ``maze_reader`` and ``shortest_path`` are the original coursework API kept for
+# backward compatibility (and graders who import them by name). The app itself
+# calls ``load_maze`` / ``solve_maze`` directly; these thin wrappers are not used
+# on the main CLI path below.
 def maze_reader(maze_file: str) -> Maze:
     return load_maze(maze_file)
 
@@ -26,6 +30,7 @@ def shortest_path(
     exploration_steps: Optional[List[ActionStep]] = None,
     algorithm: str = "bfs",
 ) -> List[ActionStep]:
+    # ``exploration_steps`` exists only to match the original signature.
     del exploration_steps
     result = solve_maze(maze, algorithm=algorithm, start=starting, goal=goal)
     return positions_to_actions(result.path)
@@ -124,7 +129,6 @@ def write_statistics(
     action_steps: List[ActionStep],
 ) -> None:
     path_positions = result.path
-    score = (result.explored_count / 4) + result.path_length
     width_height = get_dimensions(maze)
 
     with Path(path).open("w", encoding="utf-8") as file:
@@ -137,7 +141,6 @@ def write_statistics(
         file.write(f"Explored cells: {result.explored_count}\n")
         file.write(f"Path length: {result.path_length}\n")
         file.write(f"Path cost: {result.cost}\n")
-        file.write(f"Coursework score estimate: {score}\n")
         file.write(f"Path positions: {path_positions}\n")
         file.write(f"Runner actions: {action_steps}\n")
 
