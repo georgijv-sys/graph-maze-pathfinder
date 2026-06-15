@@ -241,13 +241,15 @@ def bellman_ford_search(
     parents: Dict[Position, Optional[Position]] = {start: None}
     distances[start] = 0
     visited_order: List[Position] = []
+    visited_seen: Set[Position] = set()
 
     for _ in range(max(0, len(open_cells) - 1)):
         changed = False
         for current in open_cells:
             if distances[current] == math.inf:
                 continue
-            if current not in visited_order:
+            if current not in visited_seen:
+                visited_seen.add(current)
                 visited_order.append(current)
             for nxt in maze.neighbours(current):
                 candidate = distances[current] + maze.movement_cost(nxt)
@@ -339,6 +341,11 @@ def _expand_bidirectional_frontier(
     other_parent: Dict[Position, Optional[Position]],
     visited_order: List[Position],
 ) -> Optional[Position]:
+    # Expand exactly one BFS layer (the queue length captured up front), so the
+    # two searches advance in lock-step. Returning on the first node that the
+    # other side has already reached is shortest-path-optimal for unweighted
+    # graphs: both frontiers grow by one layer per call, so the first contact
+    # happens on the minimal-sum layer boundary.
     for _ in range(len(frontier)):
         current = frontier.popleft()
         visited_order.append(current)

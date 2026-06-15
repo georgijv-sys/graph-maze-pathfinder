@@ -19,8 +19,8 @@
       about: "Combines cost-so-far with a Manhattan heuristic (f = g + h). The gold standard for grid pathfinding — optimal and far faster than Dijkstra." },
     "Dijkstra": { meta: "O(E log V) · space O(V) · optimal",
       about: "Expands cells by cumulative cost via a min-heap. No heuristic, so it explores every candidate within the cost boundary." },
-    "Bellman-Ford": { meta: "O(V · E) · space O(V) · optimal (incl. negatives)",
-      about: "Relaxes every edge V−1 times. Handles negative-weight edges where Dijkstra fails; slower on all-positive grids." },
+    "Bellman-Ford": { meta: "O(V · E) · space O(V) · optimal",
+      about: "Relaxes every edge V−1 times. The textbook method that also handles negative edges in general graphs — but this grid's cell costs are always positive, so here it matches Dijkstra's result, just slower." },
     "Greedy Best-First": { meta: "O(E log V) · space O(V) · not optimal",
       about: "Rushes toward the goal using only the heuristic, ignoring path cost. Very fast in open corridors, not cost-optimal." },
     "Bidirectional BFS": { meta: "O(b^(d/2)) · space O(b^(d/2)) · optimal (unweighted)",
@@ -415,8 +415,11 @@
       csv += `${i + 1},${p[0]},${p[1]},${ev}\n`;
     });
     const stats = `Algorithm: ${r.algorithm}\nMaze: ${S.maze.width} x ${S.maze.height}\nStart: (${r.start.join(", ")})    Goal: (${r.goal.join(", ")})\nFound: ${r.found}\nDiscovered: ${r.exploredCount} cells\nPath length: ${r.pathLength}\nPath cost: ${fmt(r.cost)}\nWeighted cells: ${S.maze.weights.size}\nPath: ${JSON.stringify(r.path)}\n`;
+    // Trigger both downloads synchronously inside the same click. A setTimeout
+    // here would detach the second download from the user gesture, which is
+    // exactly what makes browsers block it.
     download("exploration.csv", csv, "text/csv");
-    setTimeout(() => download("statistics.txt", stats, "text/plain"), 250);
+    download("statistics.txt", stats, "text/plain");
     setStatus("Exported  exploration.csv + statistics.txt.", "success");
   }
   function saveMaze() {
