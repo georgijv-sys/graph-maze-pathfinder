@@ -50,9 +50,11 @@ ALGORITHM_INFO: Dict[str, Dict[str, str]] = {
                  "so it explores every candidate within the cost boundary.",
     },
     "Bellman-Ford": {
-        "meta": "O(V · E)  ·  space O(V)  ·  optimal (incl. negative weights)",
-        "about": "Relaxes every edge V−1 times. Handles negative-weight edges "
-                 "where Dijkstra fails; slower on all-positive-cost graphs.",
+        "meta": "O(V · E)  ·  space O(V)  ·  optimal",
+        "about": "Relaxes every edge V−1 times. The textbook method that also "
+                 "handles negative edges in general graphs — though this grid's "
+                 "cell costs are always positive, so here it matches Dijkstra's "
+                 "result, just slower.",
     },
     "Greedy Best-First": {
         "meta": "O(E log V)  ·  space O(V)  ·  not optimal",
