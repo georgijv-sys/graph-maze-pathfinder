@@ -4,8 +4,15 @@ Python maze solver and visualiser built around graph search algorithms. The
 maze is modelled as a graph: cells are nodes, valid moves are edges, and
 weighted cells affect path cost.
 
-The project includes a Tkinter GUI, a command-line runner, generated mazes,
-weighted terrain, file import/export, and unit tests for the core logic.
+The project includes a polished web-based desktop app, a dependency-free
+Tkinter GUI, a command-line runner, generated mazes, weighted terrain, file
+import/export, and unit tests for the core logic.
+
+<p align="center">
+  <img src="docs/screenshots/hero.png" alt="Maze Lab — A* solving a maze in the desktop app" width="840">
+  <br>
+  <em>The desktop app (<code>python3 desktop.py</code>) — A* with its explored frontier and shortest path.</em>
+</p>
 
 ## Key Skills Demonstrated
 
@@ -24,7 +31,17 @@ weighted terrain, file import/export, and unit tests for the core logic.
 - Canvas editing tools for walls, start, goal, and weights.
 - Support for text maze files and saved generated maze files.
 - CSV/text export of explored cells, final path, cost, and runner actions.
-- No third-party runtime dependencies.
+- No third-party runtime dependencies in the core engine.
+
+## Screenshots
+
+| Discovery-order heatmap | Weighted terrain (Dijkstra) |
+| :---: | :---: |
+| ![Heatmap of the search frontier](docs/screenshots/heatmap.png) | ![Weighted maze solved with Dijkstra](docs/screenshots/weighted.png) |
+| Cells coloured by the order they were visited. | Numbered cells cost more to enter; the path routes around them. |
+| **Algorithm comparison** | **Light stage theme** |
+| ![Comparison chart of all algorithms](docs/screenshots/compare.png) | ![Light theme variant](docs/screenshots/light.png) |
+| Every algorithm run on the same maze, ranked by cells explored. | Accent colour and stage theme are switchable at runtime. |
 
 ## Algorithms
 
