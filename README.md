@@ -187,3 +187,7 @@ pyproject.toml        project metadata and entry points
 - Weighted algorithms use the cost of entering a cell.
 - Generated mazes are connected using randomized DFS carving.
 - The editor supports both blocked-cell mazes and generated wall mazes.
+
+## License
+
+Released under the [MIT License](LICENSE).
